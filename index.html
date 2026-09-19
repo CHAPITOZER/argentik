@@ -86,6 +86,7 @@ video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
 <div id="cats"></div>
 <div id="films"></div>
 <div class="opt"><span>intensité</span><input type="range" id="amt" min="0" max="150" value="100"><span id="amtv" style="width:34px">100%</span></div>
+<div class="opt"><span>grain</span><span id="grains"><button class="md" data-g="0">NON</button><button class="md" data-g="1">FAIBLE</button><button class="md" data-g="2">FORT</button></span></div>
 <div id="modes" class="lv norec"><button class="md on" data-m="photo">PHOTO</button><button class="md" data-m="video">VIDÉO</button></div>
 <div id="bar">
   <label class="side lv norec" for="lib">Photothèque</label>
@@ -248,13 +249,13 @@ class Renderer{
   if(mip)gl.generateMipmap(gl.TEXTURE_2D);if(mip!==this.mip){this.mip=mip;gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,mip?gl.LINEAR_MIPMAP_LINEAR:gl.LINEAR)}}
  draw(f,k,seed){const gl=this.gl,W=this.cv.width,H=this.cv.height,mipOk=this.mip;gl.viewport(0,0,W,H);
   const F=(n,v)=>gl.uniform1f(this.U(n),v),V=(n,v)=>gl.uniform3fv(this.U(n),v);
-  F("uEv",f.ev);F("uC",f.c);F("uBl",f.bl);F("uWh",f.wh);F("uSat",f.sat);F("uGrain",f.grain);F("uGsize",f.gsize);
+  F("uEv",f.ev);F("uC",f.c);F("uBl",f.bl);F("uWh",f.wh);F("uSat",f.sat);F("uGrain",f.grain*[0,.45,1.15][grainLv]);F("uGsize",f.gsize*[1,.8,1.15][grainLv]);
   F("uHal",f.hal);F("uBloom",f.bloom);F("uSoft",f.soft==null?.55:f.soft);F("uCa",f.ca==null?.7:f.ca);F("uDens",f.bw?0:.34);F("uCg",f.bw?0:.75);
   F("uLeak",leakOn?leak.s:0);F("uLeakW",leak.w);gl.uniform2f(this.U("uLeakP"),leak.x,leak.y);F("uVig",f.vig);F("uK",k);F("uSeed",seed);F("uIsBw",f.bw?1:0);
   V("uWb",[1+.34*f.temp,1-.16*f.tint,1-.34*f.temp]);V("uG",f.g);V("uGain",f.gain);V("uSh",f.sh.map(x=>x/255));V("uHi",f.hi.map(x=>x/255));V("uBw",f.bw||[0,0,0]);
   const m=f.mat||[1,0,0,0,1,0,0,0,1];gl.uniformMatrix3fv(this.U("uMat"),false,[m[0],m[3],m[6],m[1],m[4],m[7],m[2],m[5],m[8]]);
   gl.uniform2f(this.U("uRes"),W,H);gl.drawArrays(gl.TRIANGLE_STRIP,0,4)}}
-let leakOn=false,leak={x:0,y:.5,w:5,s:.8};
+let grainLv=2,leakOn=false,leak={x:0,y:.5,w:5,s:.8};
 function newLeak(){const e=Math.floor(Math.random()*4),t=Math.random();leak={x:e===0?-.05:e===1?1.05:t,y:e===2?-.05:e===3?1.05:t,w:2.5+Math.random()*6,s:.55+Math.random()*.45}}newLeak();
 
 // ================= ÉTAT =================
@@ -305,7 +306,9 @@ const stampTxt=d=>`'${String(d.getFullYear()).slice(2)} ${String(d.getMonth()+1)
 function setDate(){$("bDate").classList.toggle("on",dateOn);const s=$("stamp");s.style.display=dateOn?"block":"none";s.textContent=stampTxt(mode==="review"?shotDate:new Date())}
 const tgl=(id,get,set,key)=>{const b=$(id),up=()=>b.classList.toggle("on",get());up();b.onclick=()=>{set(!get());store.set(key,get()?"1":"0");up()}};
 leakOn=store.get("leak","0")==="1";tgl("bLeak",()=>leakOn,v=>{leakOn=v;newLeak();if(mode==="review"){paint();scheduleFull()}},"leak");tgl("bAuto",()=>autoOn,v=>autoOn=v,"auto");tgl("bOrig",()=>origOn,v=>origOn=v,"orig");
-document.querySelectorAll(".md").forEach(b=>b.onclick=()=>{if(rec||capMode===b.dataset.m)return;capMode=b.dataset.m;document.querySelectorAll(".md").forEach(x=>x.classList.toggle("on",x===b));
+grainLv=+store.get("grain","2");const gb=[...document.querySelectorAll("#grains .md")],gUp=()=>gb.forEach(x=>x.classList.toggle("on",+x.dataset.g===grainLv));gUp();
+gb.forEach(b=>b.onclick=()=>{grainLv=+b.dataset.g;store.set("grain",grainLv);gUp();thumbsDue=0;if(mode==="review"){paint();scheduleFull()}});
+document.querySelectorAll("#modes .md").forEach(b=>b.onclick=()=>{if(rec||capMode===b.dataset.m)return;capMode=b.dataset.m;document.querySelectorAll("#modes .md").forEach(x=>x.classList.toggle("on",x===b));
  document.body.classList.toggle("video",capMode==="video");startCam()});
 $("bDate").onclick=()=>{dateOn=!dateOn;store.set("date",dateOn?"1":"0");setDate();if(mode==="review")scheduleFull()};
 
