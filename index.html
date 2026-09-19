@@ -41,9 +41,14 @@ body.rec .norec{visibility:hidden}
 #cats::-webkit-scrollbar,#films::-webkit-scrollbar{display:none}
 .cat{flex:none;font:inherit;font-size:10px;letter-spacing:.08em;color:var(--mute);background:none;border:0;padding:6px 9px;border-bottom:2px solid transparent}
 .cat.on{color:var(--ink);border-color:var(--accent)}
-#films{display:flex;gap:6px;overflow-x:auto;padding:6px 12px;scrollbar-width:none}
+#films{display:flex;align-items:flex-start;gap:6px;overflow-x:auto;padding:6px 12px;scrollbar-width:none}
 .film{flex:none;width:66px;border:0;background:none;color:var(--mute);font:inherit;font-size:8.5px;padding:0;text-align:center;line-height:1.25}
-.film canvas{width:66px;height:88px;border-radius:5px;display:block;margin-bottom:4px;border:2px solid transparent;background:var(--panel)}
+.film canvas{width:66px;height:80px;border-radius:0 0 5px 5px;display:block;margin-bottom:4px;border:2px solid transparent;border-top:0;background:var(--panel)}
+.box{height:30px;border-radius:5px 5px 0 0;position:relative;overflow:hidden;text-align:left;padding:3px 5px 0;font-weight:700;border:2px solid transparent;border-bottom:0}
+.box u{display:block;text-decoration:none;font-size:5.5px;letter-spacing:.1em;opacity:.85;white-space:nowrap}
+.box b{display:block;font-size:12px;line-height:1.05;letter-spacing:-.02em;white-space:nowrap}
+.box i{position:absolute;left:0;right:0;bottom:0;height:6px}
+.film.on .box{border-color:var(--accent)}
 .film.on{color:var(--ink)}.film.on canvas{border-color:var(--accent)}
 .opt{display:flex;gap:8px;align-items:center;justify-content:center;font-size:10px;color:var(--mute);padding:2px 16px 0}
 .opt input[type=range]{flex:1;max-width:240px;accent-color:var(--accent)}
@@ -67,11 +72,11 @@ video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
 <body class="live">
 <header>
   <h1>CAMZ</h1>
-  <div class="tgs"><button class="tg" id="bMax">MAX</button><button class="tg" id="bAuto">AUTO</button><button class="tg" id="bOrig">+ORIG</button><button class="tg" id="bDate">DATE</button><button class="tg lv norec" id="bFlip">⟲</button></div>
+  <div class="tgs"><button class="tg" id="bLeak">FUITE</button><button class="tg" id="bAuto">AUTO</button><button class="tg" id="bOrig">+ORIG</button><button class="tg" id="bDate">DATE</button><button class="tg lv norec" id="bFlip">⟲</button></div>
 </header>
 <div id="meta"></div>
 <div id="stage">
-  <div id="empty">Autorise l'accès à la caméra pour voir le viseur en direct.<br><br>Le déclencheur (mode MAX) ouvre l'appareil photo de l'iPhone.</div>
+  <div id="empty">Autorise l'accès à la caméra pour voir le viseur en direct.<br><br></div>
   <div id="frame"><canvas id="view"></canvas><div id="stamp"></div><div id="flash"></div></div>
   <div id="name"></div>
   <div id="busy">développement…</div>
@@ -86,7 +91,7 @@ video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
   <label class="side lv norec" for="lib">Photothèque</label>
   <button class="side rv" id="back">✕ Reprendre</button>
   <button id="shutter" class="lv" aria-label="Prendre la photo"></button>
-  <button class="side lv norec" id="quick">Instantané<small>depuis le viseur</small></button>
+  <label class="side lv norec" for="cam">Natif 12 MP<small>app Appareil photo</small></label>
   <button class="side rv" id="save" disabled>Enregistrer</button>
 </div>
 <input id="cam" type="file" accept="image/*" capture="environment">
@@ -181,7 +186,11 @@ const RAW=[
 ["Créatif","dream","Pro-Mist","diffusion, halo blanc","#f0e0d0",{c:.1,bl:.05,sat:.95,hi:[8,4,0],grain:.08,bloom:.7,hal:.15,vig:.1}],
 ["Créatif","nuitvert","Vision nocturne","vert phosphore","#3fd15a",{ev:.4,c:.5,sh:[-20,10,-20],hi:[-40,20,-40],grain:.4,gsize:1.3,bloom:.3,vig:.5,bw:[.3,.6,.1]}],
 ];
-const FILMS=RAW.map(([cat,id,n,d,col,p])=>Object.assign({cat,id,n,d,col},DEF,p));
+// on pousse tous les rendus : courbes, dominantes, grain, halation, vignette
+const PUSH=f=>{f.c=Math.min(.95,f.c*1.25+.06);f.sh=f.sh.map(x=>x*1.6);f.hi=f.hi.map(x=>x*1.5);f.g=f.g.map(x=>1+(x-1)*1.4);f.gain=f.gain.map(x=>1+(x-1)*1.35);
+ f.temp*=1.25;f.tint*=1.25;if(!f.bw){f.sat=1+(f.sat-1)*1.2;f.hal=Math.max(f.hal*1.3,.16)}else f.hal=Math.max(f.hal,.06);
+ f.grain=f.grain*1.5+.06;f.vig=f.vig*1.2+.06;f.bl+=.015;f.wh=Math.min(f.wh,.985);f.bloom=Math.max(f.bloom*1.2,.1);return f};
+const FILMS=RAW.map(([cat,id,n,d,col,p])=>PUSH(Object.assign({cat,id,n,d,col},DEF,p,{g:(p.g||DEF.g).slice(),gain:(p.gain||DEF.gain).slice()})));
 const CATS=["Tous",...new Set(FILMS.map(f=>f.cat))];
 
 // ================= MOTEUR GPU (WebGL2) =================
@@ -189,12 +198,15 @@ const VS=`#version 300 es
 in vec2 p;out vec2 uv;void main(){uv=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
 const FS=`#version 300 es
 precision highp float;in vec2 uv;out vec4 o;uniform sampler2D T;
-uniform float uEv,uC,uBl,uWh,uSat,uGrain,uGsize,uHal,uBloom,uVig,uK,uSeed,uIsBw;
-uniform vec3 uWb,uG,uGain,uSh,uHi,uBw;uniform mat3 uMat;uniform vec2 uRes;
+uniform float uSoft,uCa,uDens,uCg,uLeak,uLeakW,uEv,uC,uBl,uWh,uSat,uGrain,uGsize,uHal,uBloom,uVig,uK,uSeed,uIsBw;
+uniform vec3 uWb,uG,uGain,uSh,uHi,uBw;uniform mat3 uMat;uniform vec2 uRes,uLeakP;
 float h(vec2 q){q=fract(q*vec2(443.897,441.423));q+=dot(q,q.yx+19.19);return fract((q.x+q.y)*q.x);}
 float vn(vec2 q){vec2 i=floor(q),f=fract(q);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+vec2(1.,1.)),f.x),f.y);}
-void main(){vec3 s=texture(T,uv).rgb,c=s;float K=uK;
- if(uHal+uBloom>0.){vec3 b1=textureLod(T,uv,2.).rgb,b2=textureLod(T,uv,3.5).rgb,b3=textureLod(T,uv,5.).rgb,b4=textureLod(T,uv,6.5).rgb;vec3 lw=vec3(.3,.59,.11);
+void main(){vec3 s=texture(T,uv).rgb;float K=uK,K1=min(uK,1.);vec2 dc=uv-.5;float r2=dot(dc,dc);vec3 lw=vec3(.3,.59,.11);
+ // optique d'époque : on casse le piqué numérique de l'iPhone + aberration chromatique dans les coins
+ ivec2 ts=textureSize(T,0);float L=clamp(log2(float(max(ts.x,ts.y))/1900.)+uSoft,0.,3.)*K1;vec2 ofs=dc*r2*uCa*.014*K1;
+ vec3 c=vec3(textureLod(T,uv+ofs,L).r,textureLod(T,uv,L).g,textureLod(T,uv-ofs,L).b);
+ {vec3 b1=textureLod(T,uv,2.).rgb,b2=textureLod(T,uv,3.5).rgb,b3=textureLod(T,uv,5.).rgb,b4=textureLod(T,uv,6.5).rgb;
   float hl=smoothstep(.72,1.,dot(b1,lw))*.45+smoothstep(.5,.95,dot(b2,lw))*.4+smoothstep(.34,.8,dot(b3,lw))*.35+smoothstep(.25,.7,dot(b4,lw))*.25;
   vec3 bb=(b2+b3+b4)/3.;
   c=1.-(1.-c)*(1.-clamp(vec3(1.,.22,.06)*hl*uHal*K,0.,1.));c=1.-(1.-c)*(1.-clamp(bb*hl*1.6*uBloom*K,0.,1.));}
@@ -204,10 +216,16 @@ void main(){vec3 s=texture(T,uv).rgb,c=s;float K=uK;
  float l=uIsBw>.5?clamp(dot(c,uBw),0.,1.):dot(c,vec3(.299,.587,.114));
  c=uIsBw>.5?vec3(l):l+(c-l)*uSat;
  c+=uSh*(1.-l)*(1.-l)+uHi*l*l;
+ // couleurs « denses » (soustractives) et hautes lumières qui se délavent, comme un négatif
+ float mx=max(c.r,max(c.g,c.b)),mn=min(c.r,min(c.g,c.b));c*=1.-uDens*(mx-mn)*.55;
+ float l2=dot(c,lw);c=l2+(c-l2)*(1.-.45*smoothstep(.6,1.,l2));
  c=mix(base,c,min(K,1.))+(c-base)*max(K-1.,0.);
  vec2 gp=uv*uRes/max(uRes.x,uRes.y)*(1500./uGsize);
  float n=(vn(gp+uSeed)-.5)*1.3+(h(gp*2.3+uSeed*1.7)-.5)*.7;float ll=dot(c,vec3(.3,.59,.11));
- c+=n*uGrain*.55*min(K,1.2)*(1.-.75*pow(abs(2.*ll-1.),2.));
+ float nr=vn(gp*1.13+uSeed+13.)-.5,nb=vn(gp*.91+uSeed+29.)-.5;vec3 n3=vec3(n+nr*uCg,n,n+nb*uCg);
+ c+=n3*uGrain*.55*min(K,1.2)*(1.-.75*pow(abs(2.*ll-1.),2.));
+ if(uLeak>0.){vec2 a=vec2(1.,uRes.y/uRes.x);float dl=distance(uv*a,uLeakP*a);float lk=exp(-dl*dl*uLeakW)*uLeak*K1;
+  vec3 lc=mix(vec3(1.,.12,.02),vec3(1.,.8,.3),lk);c=1.-(1.-c)*(1.-clamp(lc*lk,0.,1.));}
  float d=length((uv-.5)*vec2(1.,uRes.y/uRes.x))/length(vec2(.5,.5*uRes.y/uRes.x));
  c*=1.-uVig*1.5*min(K,1.2)*smoothstep(.4,1.05,d);
  o=vec4(clamp(c,0.,1.),1.);}`;
@@ -227,15 +245,17 @@ class Renderer{
  draw(f,k,seed){const gl=this.gl,W=this.cv.width,H=this.cv.height,mipOk=this.mip;gl.viewport(0,0,W,H);
   const F=(n,v)=>gl.uniform1f(this.U(n),v),V=(n,v)=>gl.uniform3fv(this.U(n),v);
   F("uEv",f.ev);F("uC",f.c);F("uBl",f.bl);F("uWh",f.wh);F("uSat",f.sat);F("uGrain",f.grain);F("uGsize",f.gsize);
-  F("uHal",mipOk?f.hal:0);F("uBloom",mipOk?f.bloom:0);F("uVig",f.vig);F("uK",k);F("uSeed",seed);F("uIsBw",f.bw?1:0);
+  F("uHal",f.hal);F("uBloom",f.bloom);F("uSoft",f.soft==null?.55:f.soft);F("uCa",f.ca==null?.7:f.ca);F("uDens",f.bw?0:.34);F("uCg",f.bw?0:.75);
+  F("uLeak",leakOn?leak.s:0);F("uLeakW",leak.w);gl.uniform2f(this.U("uLeakP"),leak.x,leak.y);F("uVig",f.vig);F("uK",k);F("uSeed",seed);F("uIsBw",f.bw?1:0);
   V("uWb",[1+.34*f.temp,1-.16*f.tint,1-.34*f.temp]);V("uG",f.g);V("uGain",f.gain);V("uSh",f.sh.map(x=>x/255));V("uHi",f.hi.map(x=>x/255));V("uBw",f.bw||[0,0,0]);
   const m=f.mat||[1,0,0,0,1,0,0,0,1];gl.uniformMatrix3fv(this.U("uMat"),false,[m[0],m[3],m[6],m[1],m[4],m[7],m[2],m[5],m[8]]);
   gl.uniform2f(this.U("uRes"),W,H);gl.drawArrays(gl.TRIANGLE_STRIP,0,4)}}
-const needsMip=f=>f.hal>0||f.bloom>0;
+let leakOn=false,leak={x:0,y:.5,w:5,s:.8};
+function newLeak(){const e=Math.floor(Math.random()*4),t=Math.random();leak={x:e===0?-.05:e===1?1.05:t,y:e===2?-.05:e===3?1.05:t,w:2.5+Math.random()*6,s:.55+Math.random()*.45}}newLeak();
 
 // ================= ÉTAT =================
 let film=FILMS.find(f=>f.id===store.get("film"))||FILMS[1],cat=store.get("cat","Tous"),amt=+store.get("amt",1),dateOn=store.get("date","0")==="1";
-let maxOn=store.get("max","1")==="1",autoOn=store.get("auto","1")==="1",origOn=store.get("orig","1")==="1",capMode="photo",rec=null,recT0=0,shooting=false,pendFiles=null;
+autoOn=store.get("auto","1")==="1",origOn=store.get("orig","1")==="1",capMode="photo",rec=null,recT0=0,shooting=false,pendFiles=null;
 let mode="live",facing="environment",stream=null,hiRes=store.get("res","hi")==="hi";
 let frozen=null,exifSeg=null,origBlob=null,srcName="CAMZ",job=0,held=false,seed=1,shotDate=new Date(),lastPos=null;
 const view=$("view"),vid=$("vid"),busy=$("busy");
@@ -247,9 +267,21 @@ catch(e){$("empty").style.display="block";$("empty").textContent="WebGL2 indispo
 const strip=$("films"),cats=$("cats");
 CATS.forEach(c=>{const b=document.createElement("button");b.className="cat"+(c===cat?" on":"");b.textContent=c.toUpperCase();
  b.onclick=()=>{cat=c;store.set("cat",c);[...cats.children].forEach(x=>x.classList.toggle("on",x===b));buildStrip();strip.scrollLeft=0;refreshThumbs()};cats.appendChild(b)});
+function brand(f){const id=f.id,iso=(f.n.match(/\d{2,4}/)||[""])[0];let r;
+ if(/^(hp5|delta|panf)/.test(id))r={bg:"#f4f4f0",fg:"#111",l:"ILFORD"};
+ else if(/^cs/.test(id))r={bg:"#0d0d0d",fg:"#ff3b30",l:"CINESTILL"};
+ else if(/^v\d/.test(id))r={bg:"#161616",fg:"#f7c40f",l:"KODAK VISION3"};
+ else if(/^(lomo|purple|redscale|xpro)/.test(id))r={bg:"#e6007e",fg:"#fff",l:"LOMOGRAPHY"};
+ else if(/^(pola|sx70)/.test(id))r={bg:"#fafafa",fg:"#111",l:"POLAROID",stripe:"linear-gradient(90deg,#e8382d,#f58a1f,#f7c40f,#3aa655,#2b7bd1)"};
+ else if(id==="agfa")r={bg:"#e8501d",fg:"#fff",l:"AGFA"};
+ else if(f.cat==="Fuji"||/^(instax|acros|eterna)/.test(id))r={bg:"#0a8f4f",fg:"#fff",l:"FUJIFILM"};
+ else if(f.cat==="Kodak"||/^(trix|tmax|tech|jetable)/.test(id))r={bg:"#f7c40f",fg:"#1a1a1a",l:"KODAK"};
+ else r={bg:"#26231f",fg:"#f1ece0",l:f.cat.toUpperCase()};
+ r.big=iso||f.n.split(" ")[0].slice(0,7);r.stripe=r.stripe||f.col;return r}
 function buildStrip(){strip.innerHTML="";FILMS.forEach(f=>{f.btn=f.tc=null});FILMS.filter(f=>cat==="Tous"||f.cat===cat).forEach(f=>{
  const b=document.createElement("button");b.className="film"+(f===film?" on":"");const c=document.createElement("canvas");c.width=132;c.height=176;
- b.appendChild(c);b.appendChild(document.createTextNode(f.n));b.onclick=()=>pick(f);f.btn=b;f.tc=c;strip.appendChild(b)});thumbsDue=0;
+ const br=brand(f),bx=document.createElement("div");bx.className="box";bx.style.background=br.bg;bx.style.color=br.fg;
+ b.appendChild(bx);bx.innerHTML=`<u>${br.l}</u><b>${br.big}</b><i style="background:${br.stripe}"></i>`;b.appendChild(c);b.appendChild(document.createTextNode(f.n));b.onclick=()=>pick(f);f.btn=b;f.tc=c;strip.appendChild(b)});thumbsDue=0;
  if(film.btn)film.btn.scrollIntoView({inline:"center",block:"nearest"})}
 let nameT;function pick(f){film=f;store.set("film",f.id);FILMS.forEach(x=>x.btn&&x.btn.classList.toggle("on",x===f));
  const n=$("name");n.innerHTML=`<b>${f.n}</b> · ${f.d}`;n.style.opacity=1;clearTimeout(nameT);nameT=setTimeout(()=>n.style.opacity=0,1600);
@@ -268,7 +300,7 @@ $("amt").onchange=()=>{store.set("amt",amt);if(mode==="review")scheduleFull()};
 const stampTxt=d=>`'${String(d.getFullYear()).slice(2)} ${String(d.getMonth()+1).padStart(2," ")} ${String(d.getDate()).padStart(2," ")}`;
 function setDate(){$("bDate").classList.toggle("on",dateOn);const s=$("stamp");s.style.display=dateOn?"block":"none";s.textContent=stampTxt(mode==="review"?shotDate:new Date())}
 const tgl=(id,get,set,key)=>{const b=$(id),up=()=>b.classList.toggle("on",get());up();b.onclick=()=>{set(!get());store.set(key,get()?"1":"0");up()}};
-tgl("bMax",()=>maxOn,v=>maxOn=v,"max");tgl("bAuto",()=>autoOn,v=>autoOn=v,"auto");tgl("bOrig",()=>origOn,v=>origOn=v,"orig");
+leakOn=store.get("leak","0")==="1";tgl("bLeak",()=>leakOn,v=>{leakOn=v;newLeak();if(mode==="review"){paint();scheduleFull()}},"leak");tgl("bAuto",()=>autoOn,v=>autoOn=v,"auto");tgl("bOrig",()=>origOn,v=>origOn=v,"orig");
 document.querySelectorAll(".md").forEach(b=>b.onclick=()=>{if(rec||capMode===b.dataset.m)return;capMode=b.dataset.m;document.querySelectorAll(".md").forEach(x=>x.classList.toggle("on",x===b));
  document.body.classList.toggle("video",capMode==="video");startCam()});
 $("bDate").onclick=()=>{dateOn=!dateOn;store.set("date",dateOn?"1":"0");setDate();if(mode==="review")scheduleFull()};
@@ -291,15 +323,16 @@ function stopCam(){if(rec)stopRec();if(stream){stream.getTracks().forEach(t=>t.s
 $("bFlip").onclick=()=>{facing=facing==="environment"?"user":"environment";startCam()};
 document.addEventListener("visibilitychange",()=>{if(document.hidden)stopCam();else if(mode==="live")startCam()});
 
-let fpsN=0,fpsT=0,thumbsDue=0,lastVT=-1;
+let metaT=0,fpsN=0,fpsT=0,thumbsDue=0,lastVT=-1;
 function loop(t){requestAnimationFrame(loop);if(mode!=="live"||!stream||vid.readyState<2||!vid.videoWidth)return;
  if(vid.currentTime===lastVT)return;lastVT=vid.currentTime;
  if(srcW!==vid.videoWidth||srcH!==vid.videoHeight){srcW=vid.videoWidth;srcH=vid.videoHeight;layout();
-  $("meta").textContent=`direct ${srcW}×${srcH} · ${(srcW*srcH/1e6).toFixed(1)} MP`}
+  metaT=0}
+ if(!rec&&t>metaT){metaT=t+1500;$("meta").innerHTML=`${srcW}×${srcH} · ${(srcW*srcH/1e6).toFixed(1)} MP · ${gpsTxt()}`}
  if(rec){const sec=Math.floor((performance.now()-recT0)/1000);$("meta").innerHTML=`<b style="color:#e5312b">● REC</b> ${String(Math.floor(sec/60)).padStart(2,"0")}:${String(sec%60).padStart(2,"0")} · ${film.n}`}
- main.upload(vid,needsMip(film));main.draw(film,held?0:amt,(t*.06)%97);
+ main.upload(vid,true);main.draw(film,held?0:amt,(t*.06)%97);
  // auto-adaptation : si le flux haute résolution rame, on repasse en 1920
- fpsN++;if(t-fpsT>4000){const fps=fpsN*1000/(t-fpsT);fpsN=0;fpsT=t;if(capMode==="photo"&&!shooting&&hiRes&&fps<14){hiRes=false;store.set("res","lo");startCam()}}
+ fpsN++;if(t-fpsT>4000){const fps=fpsN*1000/(t-fpsT);fpsN=0;fpsT=t;if(capMode==="photo"&&!shooting&&hiRes&&fps<9){hiRes=false;store.set("res","lo");startCam()}}
  if(t>thumbsDue&&!rec){thumbsDue=t+900;thumbs(vid,srcW,srcH)}}
 requestAnimationFrame(loop);
 const tsrc=document.createElement("canvas");tsrc.width=132;tsrc.height=176;const tctx=tsrc.getContext("2d");
@@ -312,7 +345,7 @@ function refreshThumbs(){thumbsDue=0;if(mode==="review"&&frozen)thumbs(frozen,fr
 strip.addEventListener("scroll",refreshThumbs,{passive:true});
 
 // ---------- Déclenchement ----------
-$("shutter").onclick=()=>{if(capMode==="video"){rec?stopRec():startRec()}else if(maxOn)$("cam").click();else shoot()};
+$("shutter").onclick=()=>{if(capMode==="video"){rec?stopRec():startRec()}else shoot()};
 async function shoot(){if(!stream||!vid.videoWidth||shooting)return;const w=vid.videoWidth,h=vid.videoHeight,c=document.createElement("canvas");c.width=w;c.height=h;
  c.getContext("2d").drawImage(vid,0,0,w,h);const fl=$("flash");fl.style.transition="none";fl.style.opacity=.85;requestAnimationFrame(()=>{fl.style.transition="";fl.style.opacity=0});
  shotDate=new Date();srcName="CAMZ_"+shotDate.toISOString().slice(0,19).replace(/[-:T]/g,"");origBlob=null;
@@ -322,7 +355,7 @@ async function shoot(){if(!stream||!vid.videoWidth||shooting)return;const w=vid.
   shooting=true;busy.style.display="block";
   try{const files=await develop(c,Math.random()*90);c.width=c.height=1;busy.style.display="none";metaLine({},g,true);await deliver(files)}
   finally{shooting=false;busy.style.display="none";if(vid.paused)vid.play().catch(()=>{})}
-  if(!g)locate();return}
+  newLeak();return}
  metaLine({},g,true);enterReview(c);stopCam();
  if(!g)getPos(8000).then(p=>{if(p&&mode==="review"&&frozen===c){const s2=addGps(exifSeg,p);if(s2!==exifSeg){exifSeg=s2;metaLine({},true,true);scheduleFull()}}})}
 function renderFull(c,sd){const W=c.width,H=c.height;if(!bigR)bigR=new Renderer(document.createElement("canvas"));bigR.cv.width=W;bigR.cv.height=H;bigR.upload(c,true);bigR.draw(film,amt,sd);
@@ -337,7 +370,6 @@ async function deliver(files){pendFiles=files;
  catch(e){$("pend").style.display="flex";return false} // geste requis ou feuille annulée → gros bouton pour réessayer
  const f=files[0];pendFiles=null;if(f.type.startsWith("image")){$("out").src=URL.createObjectURL(f);$("sheet").style.display="flex"}
  else{const a=document.createElement("a");a.href=URL.createObjectURL(f);a.download=f.name;a.click()}return false}
-$("quick").onclick=()=>{if(capMode==="photo")shoot()};
 $("pendBtn").onclick=()=>{if(pendFiles)deliver(pendFiles)};
 $("pendNo").onclick=()=>{pendFiles=null;$("pend").style.display="none"};
 
@@ -354,7 +386,7 @@ function stopRec(){if(rec&&rec.state!=="inactive")rec.stop()}
 function enterReview(c){frozen=c;mode="review";document.body.className="review";srcW=c.width;srcH=c.height;seed=Math.random()*90;
  $("frame").style.display="block";$("empty").style.display="none";layout();main.upload(frozen,true);paint();setDate();thumbs(c,c.width,c.height);scheduleFull()}
 function paint(){if(mode==="review"&&frozen&&main)main.draw(film,held?0:amt,seed)}
-$("back").onclick=()=>{mode="live";document.body.className="live";frozen=null;outFiles=null;++job;busy.style.display="none";lastVT=-1;setDate();$("meta").textContent="";startCam()};
+$("back").onclick=()=>{newLeak();mode="live";document.body.className="live";frozen=null;outFiles=null;++job;busy.style.display="none";lastVT=-1;setDate();$("meta").textContent="";startCam()};
 
 let outFiles=null;
 function scheduleFull(){const my=++job;outFiles=null;$("save").disabled=true;busy.style.display="block";
@@ -432,8 +464,10 @@ function addGps(seg,pos){try{const c=pos.coords,old=seg.slice(10),ov=new DataVie
 // ---------- GPS ----------
 function getPos(timeout){return new Promise(r=>{if(!navigator.geolocation)return r(null);
  navigator.geolocation.getCurrentPosition(p=>{lastPos=p;r(p)},()=>r(null),{enableHighAccuracy:true,maximumAge:30000,timeout})})}
-function locate(){getPos(20000)}
-setInterval(()=>{if(mode==="live"&&!document.hidden)locate()},45000);
+let watchId=null,gpsErr="";
+function locate(){if(!navigator.geolocation||watchId!==null)return;
+ watchId=navigator.geolocation.watchPosition(p=>{lastPos=p;gpsErr=""},e=>{gpsErr=e.code===1?"refusée":"introuvable"},{enableHighAccuracy:true,maximumAge:10000,timeout:30000})}
+const gpsTxt=()=>lastPos&&Date.now()-lastPos.timestamp<180000?`<b>GPS ✓ ±${Math.round(lastPos.coords.accuracy)} m</b>`:`<span style="color:#ff6b5e">GPS ✗ ${gpsErr||"recherche…"}</span>`;
 function metaLine(info,gpsAdded,own){$("meta").innerHTML=`<b>EXIF ✓</b> ${own?"date ✓":(info.date||"")} · ${info.gps?"<b>GPS ✓</b>":gpsAdded?"<b>GPS ✓ (téléphone)</b>":"GPS … autorise la localisation"}`}
 
 // ---------- Import (photothèque / appareil photo natif 12 MP) ----------
