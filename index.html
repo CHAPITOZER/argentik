@@ -186,6 +186,17 @@ const RAW=[
 ["Créatif","expired","Périmée 1998","voile, couleurs mortes","#9c8f6a",{g:[.95,.97,1.08],c:.08,bl:.14,wh:.9,sat:.6,sh:[10,10,-4],hi:[10,6,-12],grain:.34,gsize:1.6,vig:.3}],
 ["Créatif","dream","Pro-Mist","diffusion, halo blanc","#f0e0d0",{c:.1,bl:.05,sat:.95,hi:[8,4,0],grain:.08,bloom:.7,hal:.15,vig:.1}],
 ["Créatif","nuitvert","Vision nocturne","vert phosphore","#3fd15a",{ev:.4,c:.5,sh:[-20,10,-20],hi:[-40,20,-40],grain:.4,gsize:1.3,bloom:.3,vig:.5,bw:[.3,.6,.1]}],
+// ---- FLASH : rendus pensés pour le flash direct (sujet très éclairé, fond qui tombe dans le noir)
+["Flash","fl_funsaver","FunSaver 800 flash","jetable, soirée, chaud","#f7c40f",{ev:.1,g:[.9,.95,1.08],gain:[1.05,1,.92],c:.55,bl:.02,sat:1.22,sh:[-6,8,2],hi:[14,8,-10],grain:.26,gsize:1.4,hal:.12,vig:.5}],
+["Flash","fl_t2","T2 · Portra 400 flash","compact de luxe, net, neutre","#e8b48a",{temp:-.08,g:[.94,.96,1],c:.5,bl:.0,wh:1,sat:1.05,sh:[-6,2,8],hi:[8,4,-4],mat:M.portra,grain:.12,hal:.08,vig:.3}],
+["Flash","fl_superia","Superia 400 soirée","ombres vertes, peaux magenta","#4aa05a",{tint:.18,g:[1,.92,1],c:.5,bl:.01,sat:1.25,sh:[-10,14,4],hi:[12,-2,8],mat:M.fuji,grain:.2,gsize:1.2,vig:.38}],
+["Flash","fl_paparazzi","Paparazzi Tri-X","N&B dur, fond noir","#555",{ev:.15,c:.85,bl:0,wh:1,grain:.34,gsize:1.4,vig:.45,bw:[.45,.42,.13]}],
+["Flash","fl_highkey","High-key studio","surexposé, peau blanche, rouges vifs","#f2f2f2",{ev:.55,c:.6,bl:.0,wh:1,sat:1.3,sh:[0,0,6],hi:[4,2,4],mat:M.koda,grain:.08,bloom:.3,vig:.12}],
+["Flash","fl_pola","Polaroid flash","crème, délavé, ombres bleues","#d9cfae",{ev:.2,g:[.95,.96,1.02],c:.3,bl:.1,wh:.94,sat:.85,sh:[-8,6,18],hi:[14,10,-8],grain:.12,bloom:.3,vig:.4}],
+["Flash","fl_800t","800T flash nuit","froid, halos rouges derrière","#d8324a",{temp:-.35,g:[1.05,.98,.9],c:.5,bl:.02,sat:1.05,sh:[-14,2,20],hi:[8,0,-2],grain:.24,gsize:1.3,hal:.9,bloom:.15,vig:.36}],
+["Flash","fl_gold","Gold 200 flash","peaux dorées, 35 mm de famille","#f0b429",{temp:.25,g:[.9,.95,1.1],gain:[1.05,1,.9],c:.48,bl:.015,sat:1.2,sh:[4,2,-6],hi:[16,10,-14],grain:.16,hal:.1,vig:.34}],
+["Flash","fl_lca","LC-A flash","Lomo, couleurs croisées, tunnel","#e6007e",{g:[.95,.88,1.15],c:.7,bl:0,sat:1.45,sh:[-12,0,22],hi:[16,14,-18],grain:.24,vig:.75}],
+["Flash","fl_quicksnap","QuickSnap 400","jetable Fuji, froid et vert","#0a8f4f",{temp:-.18,g:[1.02,.93,.98],c:.5,bl:.025,sat:1.12,sh:[-10,12,8],hi:[2,8,4],mat:M.fuji,grain:.26,gsize:1.4,vig:.48}],
 ];
 // on pousse tous les rendus : courbes, dominantes, grain, halation, vignette
 const PUSH=f=>{f.c=Math.min(.95,f.c*1.25+.06);f.sh=f.sh.map(x=>x*1.6);f.hi=f.hi.map(x=>x*1.5);f.g=f.g.map(x=>1+(x-1)*1.4);f.gain=f.gain.map(x=>1+(x-1)*1.35);
@@ -273,7 +284,8 @@ const strip=$("films"),cats=$("cats");
 CATS.forEach(c=>{const b=document.createElement("button");b.className="cat"+(c===cat?" on":"");b.textContent=c.toUpperCase();
  b.onclick=()=>{cat=c;store.set("cat",c);[...cats.children].forEach(x=>x.classList.toggle("on",x===b));buildStrip();strip.scrollLeft=0;refreshThumbs()};cats.appendChild(b)});
 function brand(f){const id=f.id,iso=(f.n.match(/\d{2,4}/)||[""])[0];let r;
- if(/^(hp5|delta|panf)/.test(id))r={bg:"#f4f4f0",fg:"#111",l:"ILFORD"};
+ if(/^fl_/.test(id))r={bg:"#111",fg:"#ffe14d",l:"FLASH ⚡"};
+ else if(/^(hp5|delta|panf)/.test(id))r={bg:"#f4f4f0",fg:"#111",l:"ILFORD"};
  else if(/^cs/.test(id))r={bg:"#0d0d0d",fg:"#ff3b30",l:"CINESTILL"};
  else if(/^v\d/.test(id))r={bg:"#161616",fg:"#f7c40f",l:"KODAK VISION3"};
  else if(/^(lomo|purple|redscale|xpro)/.test(id))r={bg:"#e6007e",fg:"#fff",l:"LOMOGRAPHY"};
