@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Argentik">
-<title>Argentik</title>
+<meta name="apple-mobile-web-app-title" content="CAMZ">
+<title>CAMZ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#0e0d0b">
 <style>
 :root{--bg:#f3efe7;--panel:#e7e1d4;--ink:#1b1916;--mute:#6e675b;--accent:#d9541e;--line:#cfc7b6;--ok:#2f7d4a}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e0d0b;--panel:#1a1815;--ink:#f1ece0;--mute:#8f8777;--accent:#ff7a3c;--line:#2c2924;--ok:#6fcf8f}}
@@ -36,7 +39,7 @@ h1{font-size:15px;letter-spacing:.28em;margin:0;font-weight:700}
 #shutter::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--ink)}
 #shutter:active::after{inset:9px}
 input[type=file]{display:none}
-label.opt{display:flex;gap:6px;align-items:center;justify-content:center;font-size:10px;color:var(--mute);padding-bottom:4px}
+.opt{padding-left:16px;padding-right:16px;display:flex;gap:6px;align-items:center;justify-content:center;font-size:10px;color:var(--mute);padding-bottom:4px}
 #sheet{position:fixed;inset:0;background:var(--bg);z-index:9;display:none;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top) + 14px) 16px 20px;gap:12px;overflow:auto}
 #sheet img{max-width:100%;max-height:70vh;border-radius:4px;-webkit-touch-callout:default;user-select:auto}
 #sheet p{font-size:12px;text-align:center;line-height:1.6;margin:0}
@@ -44,13 +47,15 @@ label.opt{display:flex;gap:6px;align-items:center;justify-content:center;font-si
 </style>
 </head>
 <body>
-<header><h1>ARGENTIK</h1><div id="meta">aucune photo</div></header>
+<header><h1>CAMZ</h1><div id="meta">aucune photo</div></header>
 <div id="stage">
   <div id="empty">Appuie sur le déclencheur<br>pour prendre une photo.<br><br>Choisis ta pellicule en bas.</div>
   <canvas id="view"></canvas>
+  <div id="hint" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);font-size:10px;color:#fff;background:#0008;padding:4px 10px;border-radius:12px;display:none">maintenir = voir l'original</div>
   <div id="busy">développement…</div>
 </div>
 <div id="films"></div>
+<div class="opt"><span>intensité</span><input type="range" id="amt" min="0" max="100" value="100" style="display:inline;flex:1;max-width:220px;accent-color:var(--accent)"><span id="amtv">100%</span></div>
 <label class="opt"><input type="checkbox" id="withOrig" style="display:inline" checked> enregistrer aussi l'original sans filtre</label>
 <div id="bar">
   <label class="side" for="lib">Photothèque</label>
@@ -103,7 +108,7 @@ function noise(){if(noiseTile)return noiseTile;const c=document.createElement("c
  const x=c.getContext("2d"),d=x.createImageData(256,256);
  for(let i=0;i<d.data.length;i+=4){const v=128+(Math.random()+Math.random()+Math.random()-1.5)*110;d.data[i]=d.data[i+1]=d.data[i+2]=v;d.data[i+3]=255}
  x.putImageData(d,0,0);return noiseTile=c}
-function halation(ctx,W,H,f){if(!f.hal)return;
+function halation(ctx,W,H,f,k){if(!f.hal)return;
  const w=320,h=Math.max(1,Math.round(w*H/W)),a=document.createElement("canvas");a.width=w;a.height=h;
  const ax=a.getContext("2d");ax.drawImage(ctx.canvas,0,0,w,h);const d=ax.getImageData(0,0,w,h),p=d.data,thr=200;
  for(let i=0;i<p.length;i+=4){const l=.3*p[i]+.59*p[i+1]+.11*p[i+2];const v=l>thr?(l-thr)/(255-thr):0;p[i]=255*v;p[i+1]=70*v;p[i+2]=25*v}
@@ -111,34 +116,42 @@ function halation(ctx,W,H,f){if(!f.hal)return;
  const b=document.createElement("canvas");b.width=Math.max(1,w>>3);b.height=Math.max(1,h>>3);const bx=b.getContext("2d");
  bx.imageSmoothingQuality="high";bx.drawImage(a,0,0,b.width,b.height);
  ax.globalAlpha=.75;ax.drawImage(b,0,0,w,h);ax.globalAlpha=1;
- ctx.save();ctx.globalCompositeOperation="screen";ctx.globalAlpha=Math.min(1,f.hal);ctx.imageSmoothingQuality="high";
+ ctx.save();ctx.globalCompositeOperation="screen";ctx.globalAlpha=Math.min(1,f.hal*k);ctx.imageSmoothingQuality="high";
  ctx.drawImage(a,0,0,W,H);ctx.drawImage(b,0,0,W,H);ctx.restore()}
-function develop(canvas,img,W,H,f){
+function develop(canvas,img,W,H,f,k=1){
  canvas.width=W;canvas.height=H;const ctx=canvas.getContext("2d",{willReadFrequently:true});
- ctx.drawImage(img,0,0,W,H);halation(ctx,W,H,f);
- const [LR,LG,LB]=luts(f),sat=f.sat,sh=f.sh,hi=f.hi,bw=f.bw,SH=512;
+ ctx.drawImage(img,0,0,W,H);if(k<=0)return;halation(ctx,W,H,f,k);
+ const [LR,LG,LB]=luts(f),sat=1+(f.sat-1)*(f.bw?1:k),sh=f.sh,hi=f.hi,bw=f.bw,SH=512;
  for(let y=0;y<H;y+=SH){const hh=Math.min(SH,H-y),d=ctx.getImageData(0,y,W,hh),p=d.data;
-  for(let i=0;i<p.length;i+=4){let r=LR[p[i]],g=LG[p[i+1]],b=LB[p[i+2]];
+  for(let i=0;i<p.length;i+=4){const o0=p[i],o1=p[i+1],o2=p[i+2];let r=LR[o0],g=LG[o1],b=LB[o2];
    let l=bw?bw[0]*r+bw[1]*g+bw[2]*b:.299*r+.587*g+.114*b;
    if(bw){r=g=b=l}else{r=l+(r-l)*sat;g=l+(g-l)*sat;b=l+(b-l)*sat}
    const t=l/255,ws=(1-t)*(1-t),wh=t*t;
-   p[i]=r+sh[0]*ws+hi[0]*wh;p[i+1]=g+sh[1]*ws+hi[1]*wh;p[i+2]=b+sh[2]*ws+hi[2]*wh}
+   r+=sh[0]*ws+hi[0]*wh;g+=sh[1]*ws+hi[1]*wh;b+=sh[2]*ws+hi[2]*wh;
+   p[i]=o0+(r-o0)*k;p[i+1]=o1+(g-o1)*k;p[i+2]=o2+(b-o2)*k}
   ctx.putImageData(d,0,y)}
- if(f.grain){const n=noise(),T=Math.max(128,Math.round(256*Math.max(W,H)/1600));ctx.save();ctx.globalCompositeOperation="overlay";ctx.globalAlpha=Math.min(1,f.grain*2.2);
+ if(f.grain){const n=noise(),T=Math.max(128,Math.round(256*Math.max(W,H)/1600));ctx.save();ctx.globalCompositeOperation="overlay";ctx.globalAlpha=Math.min(1,f.grain*2.2*k);
   for(let y=0;y<H;y+=T)for(let x=0;x<W;x+=T)ctx.drawImage(n,x,y,T,T);ctx.restore()}
  if(f.vig){const R=Math.hypot(W,H)/2,gr=ctx.createRadialGradient(W/2,H/2,R*.45,W/2,H/2,R);
-  gr.addColorStop(0,"rgba(0,0,0,0)");gr.addColorStop(1,`rgba(0,0,0,${f.vig*1.6})`);ctx.fillStyle=gr;ctx.fillRect(0,0,W,H)}
+  gr.addColorStop(0,"rgba(0,0,0,0)");gr.addColorStop(1,`rgba(0,0,0,${f.vig*1.6*k})`);ctx.fillStyle=gr;ctx.fillRect(0,0,W,H)}
 }
 function fit(w,h,max){const s=Math.min(1,max/Math.max(w,h));return[Math.round(w*s),Math.round(h*s)]}
 
-function render(){if(!srcImg)return;const my=++job;fullBlob=null;$("save").disabled=true;
- const [pw,ph]=fit(srcImg.naturalWidth,srcImg.naturalHeight,1100);develop(view,srcImg,pw,ph,film);
+let amt=1;try{const a=localStorage.getItem("amt");if(a!==null){amt=+a;$("amt").value=amt*100;$("amtv").textContent=Math.round(amt*100)+"%"}}catch(e){}
+function preview(k=amt){if(!srcImg)return;const [pw,ph]=fit(srcImg.naturalWidth,srcImg.naturalHeight,1100);develop(view,srcImg,pw,ph,film,k)}
+function render(){if(!srcImg)return;const my=++job;fullBlob=null;$("save").disabled=true;preview();
  busy.style.display="block";
  setTimeout(()=>{if(my!==job)return;
   const [W,H]=fit(srcImg.naturalWidth,srcImg.naturalHeight,4096),c=document.createElement("canvas");
-  develop(c,srcImg,W,H,film);
+  develop(c,srcImg,W,H,film,amt);
   c.toBlob(async bl=>{c.width=c.height=0;if(my!==job)return;
-   fullBlob=exifSeg?await injectExif(bl,exifSeg):bl;busy.style.display="none";$("save").disabled=false},"image/jpeg",.95)},60)}
+   fullBlob=exifSeg?await injectExif(bl,exifSeg):bl;busy.style.display="none";$("save").disabled=false},"image/jpeg",.95)},120)}
+$("amt").oninput=e=>{amt=e.target.value/100;$("amtv").textContent=e.target.value+"%";++job;$("save").disabled=true;preview()};
+$("amt").onchange=()=>{try{localStorage.setItem("amt",amt)}catch(e){} render()};
+let held=false;const hold=on=>{if(!srcImg||held===on)return;held=on;preview(on?0:amt)};
+view.addEventListener("touchstart",e=>{e.preventDefault();hold(true)},{passive:false});
+["touchend","touchcancel"].forEach(t=>view.addEventListener(t,()=>hold(false)));
+view.addEventListener("mousedown",()=>hold(true));addEventListener("mouseup",()=>hold(false));
 
 // ---------- EXIF : copie intégrale du bloc d'origine (date, heure, GPS, appareil) ----------
 function readExif(buf){const b=new Uint8Array(buf);if(b[0]!==0xFF||b[1]!==0xD8)return null;let p=2;
@@ -158,21 +171,78 @@ async function injectExif(blob,seg){const j=new Uint8Array(await blob.arrayBuffe
  if(j[2]===0xFF&&j[3]===0xE0)p=4+((j[4]<<8)|j[5]);
  return new Blob([j.slice(0,2),seg,j.slice(p)],{type:"image/jpeg"})}
 
+// ---------- GPS de secours : si la photo arrive sans GPS, on écrit la position du téléphone ----------
+let lastPos=null,origBlob=null;
+function replaceExif(buf,seg){const b=new Uint8Array(buf);if(b[0]!==0xFF||b[1]!==0xD8)return null;let p=2,cut=null,ins=2;
+ while(p+4<b.length&&b[p]===0xFF){const m=b[p+1];if(m===0xDA)break;const len=(b[p+2]<<8)|b[p+3];
+  if(m===0xE0&&p===2)ins=p+2+len;
+  if(m===0xE1&&b[p+4]===0x45&&b[p+5]===0x78&&b[p+6]===0x69&&b[p+7]===0x66){cut=[p,p+2+len];break}p+=2+len}
+ return cut?new Blob([b.slice(0,cut[0]),seg,b.slice(cut[1])],{type:"image/jpeg"}):new Blob([b.slice(0,ins),seg,b.slice(ins)],{type:"image/jpeg"})}
+function locate(){if(!navigator.geolocation)return;navigator.geolocation.getCurrentPosition(p=>{lastPos=p},()=>{},{enableHighAccuracy:true,maximumAge:30000,timeout:20000})}
+function minimalExif(d){const t=new Uint8Array(46),v=new DataView(t.buffer);t.set([0x49,0x49,0x2A,0]);v.setUint32(4,8,true);v.setUint16(8,1,true);
+ v.setUint16(10,0x0132,true);v.setUint16(12,2,true);v.setUint32(14,20,true);v.setUint32(18,26,true);v.setUint32(22,0,true);
+ const p=n=>String(n).padStart(2,"0"),s=`${d.getFullYear()}:${p(d.getMonth()+1)}:${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+ for(let i=0;i<19;i++)t[26+i]=s.charCodeAt(i);return wrapTiff(t)}
+function wrapTiff(t){const seg=new Uint8Array(10+t.length);seg.set([0xFF,0xE1,((t.length+8)>>8)&255,(t.length+8)&255,0x45,0x78,0x69,0x66,0,0]);seg.set(t,10);return seg}
+function addGps(seg,pos){try{const c=pos.coords,old=seg.slice(10),ov=new DataView(old.buffer),le=ov.getUint16(0)===0x4949;
+ const ifd0=ov.getUint32(4,le),n=ov.getUint16(ifd0,le);
+ for(let i=0;i<n;i++)if(ov.getUint16(ifd0+2+i*12,le)===0x8825)return seg;
+ const base=old.length+(old.length&1),ifdSize=2+(n+1)*12+4,gpsOff=base+ifdSize;
+ const ents=[],data=[];let dataLen=0;
+ const rat=arr=>{const o=dataLen;data.push({o,arr});dataLen+=arr.length*8;return o};
+ const dms=x=>{x=Math.abs(x);const d=Math.floor(x),m=Math.floor((x-d)*60),s=Math.round(((x-d)*60-m)*60*10000);return[[d,1],[m,1],[s,10000]]};
+ const dt=new Date(pos.timestamp||Date.now()),p2=n=>String(n).padStart(2,"0");
+ ents.push({tag:0,type:1,count:4,inl:[2,3,0,0]});
+ ents.push({tag:1,type:2,count:2,inl:[c.latitude<0?83:78,0,0,0]});ents.push({tag:2,type:5,count:3,off:rat(dms(c.latitude))});
+ ents.push({tag:3,type:2,count:2,inl:[c.longitude<0?87:69,0,0,0]});ents.push({tag:4,type:5,count:3,off:rat(dms(c.longitude))});
+ if(c.altitude!=null){ents.push({tag:5,type:1,count:1,inl:[c.altitude<0?1:0,0,0,0]});ents.push({tag:6,type:5,count:1,off:rat([[Math.round(Math.abs(c.altitude)*100),100]])})}
+ ents.push({tag:7,type:5,count:3,off:rat([[dt.getUTCHours(),1],[dt.getUTCMinutes(),1],[dt.getUTCSeconds(),1]])});
+ const ds=`${dt.getUTCFullYear()}:${p2(dt.getUTCMonth()+1)}:${p2(dt.getUTCDate())}\0`;const dsOff=dataLen;dataLen+=12;
+ ents.push({tag:0x1D,type:2,count:11,off:dsOff,str:ds});
+ if(c.accuracy!=null)ents.push({tag:0x1F,type:5,count:1,off:rat([[Math.round(c.accuracy*100),100]])});
+ const gpsSize=2+ents.length*12+4,dataOff=gpsOff+gpsSize,total=dataOff+dataLen;
+ if(total+8>65535)return seg;
+ const t=new Uint8Array(total),v=new DataView(t.buffer);t.set(old);
+ // nouvel IFD0 = copie + entrée GPS, trié par tag
+ let w=base;v.setUint16(w,n+1,le);w+=2;let done=false;
+ const putGps=()=>{v.setUint16(w,0x8825,le);v.setUint16(w+2,4,le);v.setUint32(w+4,1,le);v.setUint32(w+8,gpsOff,le);w+=12;done=true};
+ for(let i=0;i<n;i++){const e=ifd0+2+i*12;if(!done&&ov.getUint16(e,le)>0x8825)putGps();t.set(old.subarray(e,e+12),w);w+=12}
+ if(!done)putGps();v.setUint32(w,ov.getUint32(ifd0+2+n*12,le),le);
+ v.setUint32(4,base,le);
+ w=gpsOff;v.setUint16(w,ents.length,le);w+=2;
+ for(const e of ents){v.setUint16(w,e.tag,le);v.setUint16(w+2,e.type,le);v.setUint32(w+4,e.count,le);
+  if(e.inl)t.set(e.inl,w+8);else v.setUint32(w+8,dataOff+e.off,le);w+=12}
+ v.setUint32(w,0,le);
+ for(const d of data)d.arr.forEach((r,i)=>{v.setUint32(dataOff+d.o+i*8,r[0],le);v.setUint32(dataOff+d.o+i*8+4,r[1],le)});
+ for(let i=0;i<ds.length;i++)t[dataOff+dsOff+i]=ds.charCodeAt(i);
+ return wrapTiff(t)}catch(e){return seg}}
+
 // ---------- Chargement ----------
-async function load(file){if(!file)return;srcFile=file;const buf=await file.arrayBuffer();exifSeg=readExif(buf);
+async function load(file,fromCam){if(!file)return;srcFile=file;origBlob=null;const buf=await file.arrayBuffer();exifSeg=readExif(buf);
+ let rawSeg=exifSeg?exifSeg.slice():null; // orientation intacte, pour l'original
+ let info=exifSeg?exifInfo(exifSeg):{gps:false,date:null},gpsAdded=false;
+ if(fromCam&&!info.gps){ // photo prise à l'instant sans GPS → position du téléphone
+  if(!lastPos||Date.now()-lastPos.timestamp>120000)await new Promise(r=>{if(!navigator.geolocation)return r();
+   navigator.geolocation.getCurrentPosition(p=>{lastPos=p;r()},()=>r(),{enableHighAccuracy:true,maximumAge:60000,timeout:6000})});
+  if(lastPos&&Date.now()-lastPos.timestamp<180000){if(!exifSeg)exifSeg=minimalExif(new Date(file.lastModified||Date.now()));
+   const s2=addGps(exifSeg,lastPos);gpsAdded=s2!==exifSeg;exifSeg=s2;
+   if(gpsAdded)origBlob=replaceExif(buf,addGps(rawSeg||minimalExif(new Date(file.lastModified||Date.now())),lastPos))}}
  let m="⚠ pas d'EXIF dans ce fichier";
- if(exifSeg){const i=exifInfo(exifSeg);m=`<b>EXIF conservé ✓</b><br>${i.date||"date ?"}<br>${i.gps?"<b>GPS ✓</b>":"GPS ✗ (active Localisation pour Safari/Appareil photo)"}`}
+ if(exifSeg)m=`<b>EXIF conservé ✓</b><br>${info.date||"date : maintenant"}<br>${info.gps?"<b>GPS ✓</b>":gpsAdded?"<b>GPS ✓ (position du téléphone)</b>":"GPS ✗ — autorise la localisation"}`;
  $("meta").innerHTML=m;
- const img=new Image();img.onload=()=>{srcImg=img;$("empty").style.display="none";view.style.display="block";render()};
+ const img=new Image();img.onload=()=>{srcImg=img;$("empty").style.display="none";view.style.display="block";
+  const h=$("hint");h.style.display="block";setTimeout(()=>h.style.display="none",2500);render()};
  img.src=URL.createObjectURL(file)}
-$("cam").onchange=e=>{load(e.target.files[0]);e.target.value=""};
-$("lib").onchange=e=>{load(e.target.files[0]);e.target.value=""};
+$("shutter").addEventListener("click",locate);
+$("cam").onchange=e=>{load(e.target.files[0],true);e.target.value=""};
+$("lib").onchange=e=>{load(e.target.files[0],false);e.target.value=""};
+if("serviceWorker"in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
 
 // ---------- Enregistrement ----------
 $("save").onclick=async()=>{if(!fullBlob)return;
  const base=(srcFile.name||"photo").replace(/\.[^.]+$/,"")||"photo",stamp=Date.now().toString(36);
  const name=`${base}_${film.id}_${stamp}.jpg`,files=[new File([fullBlob],name,{type:"image/jpeg"})];
- if($("withOrig").checked&&srcFile)files.push(new File([srcFile],`${base}_original_${stamp}.jpg`,{type:srcFile.type||"image/jpeg"}));
+ if($("withOrig").checked&&srcFile)files.push(new File([origBlob||srcFile],`${base}_original_${stamp}.jpg`,{type:srcFile.type||"image/jpeg"}));
  try{if(navigator.canShare&&navigator.canShare({files})){await navigator.share({files});return}}
  catch(e){if(e&&e.name==="AbortError")return}
  const u=URL.createObjectURL(fullBlob);$("out").src=u;$("dl").href=u;$("dl").download=name;$("sheet").style.display="flex"};
