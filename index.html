@@ -67,11 +67,11 @@ video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
 <body class="live">
 <header>
   <h1>CAMZ</h1>
-  <div class="tgs"><button class="tg" id="bAuto">AUTO</button><button class="tg" id="bOrig">+ORIGINAL</button><button class="tg" id="bDate">DATE</button><button class="tg lv norec" id="bFlip">⟲</button></div>
+  <div class="tgs"><button class="tg" id="bMax">MAX</button><button class="tg" id="bAuto">AUTO</button><button class="tg" id="bOrig">+ORIG</button><button class="tg" id="bDate">DATE</button><button class="tg lv norec" id="bFlip">⟲</button></div>
 </header>
 <div id="meta"></div>
 <div id="stage">
-  <div id="empty">Autorise l'accès à la caméra pour voir le viseur en direct.<br><br>Sinon : bouton « iPhone 12 MP » en bas.</div>
+  <div id="empty">Autorise l'accès à la caméra pour voir le viseur en direct.<br><br>Le déclencheur (mode MAX) ouvre l'appareil photo de l'iPhone.</div>
   <div id="frame"><canvas id="view"></canvas><div id="stamp"></div><div id="flash"></div></div>
   <div id="name"></div>
   <div id="busy">développement…</div>
@@ -86,7 +86,7 @@ video{position:absolute;width:2px;height:2px;opacity:0;pointer-events:none}
   <label class="side lv norec" for="lib">Photothèque</label>
   <button class="side rv" id="back">✕ Reprendre</button>
   <button id="shutter" class="lv" aria-label="Prendre la photo"></button>
-  <label class="side lv norec" for="cam">iPhone 12 MP<small>qualité max</small></label>
+  <button class="side lv norec" id="quick">Instantané<small>depuis le viseur</small></button>
   <button class="side rv" id="save" disabled>Enregistrer</button>
 </div>
 <input id="cam" type="file" accept="image/*" capture="environment">
@@ -235,7 +235,7 @@ const needsMip=f=>f.hal>0||f.bloom>0;
 
 // ================= ÉTAT =================
 let film=FILMS.find(f=>f.id===store.get("film"))||FILMS[1],cat=store.get("cat","Tous"),amt=+store.get("amt",1),dateOn=store.get("date","0")==="1";
-let autoOn=store.get("auto","1")==="1",origOn=store.get("orig","1")==="1",capMode="photo",rec=null,recT0=0,shooting=false,pendFiles=null;
+let maxOn=store.get("max","1")==="1",autoOn=store.get("auto","1")==="1",origOn=store.get("orig","1")==="1",capMode="photo",rec=null,recT0=0,shooting=false,pendFiles=null;
 let mode="live",facing="environment",stream=null,hiRes=store.get("res","hi")==="hi";
 let frozen=null,exifSeg=null,origBlob=null,srcName="CAMZ",job=0,held=false,seed=1,shotDate=new Date(),lastPos=null;
 const view=$("view"),vid=$("vid"),busy=$("busy");
@@ -268,7 +268,7 @@ $("amt").onchange=()=>{store.set("amt",amt);if(mode==="review")scheduleFull()};
 const stampTxt=d=>`'${String(d.getFullYear()).slice(2)} ${String(d.getMonth()+1).padStart(2," ")} ${String(d.getDate()).padStart(2," ")}`;
 function setDate(){$("bDate").classList.toggle("on",dateOn);const s=$("stamp");s.style.display=dateOn?"block":"none";s.textContent=stampTxt(mode==="review"?shotDate:new Date())}
 const tgl=(id,get,set,key)=>{const b=$(id),up=()=>b.classList.toggle("on",get());up();b.onclick=()=>{set(!get());store.set(key,get()?"1":"0");up()}};
-tgl("bAuto",()=>autoOn,v=>autoOn=v,"auto");tgl("bOrig",()=>origOn,v=>origOn=v,"orig");
+tgl("bMax",()=>maxOn,v=>maxOn=v,"max");tgl("bAuto",()=>autoOn,v=>autoOn=v,"auto");tgl("bOrig",()=>origOn,v=>origOn=v,"orig");
 document.querySelectorAll(".md").forEach(b=>b.onclick=()=>{if(rec||capMode===b.dataset.m)return;capMode=b.dataset.m;document.querySelectorAll(".md").forEach(x=>x.classList.toggle("on",x===b));
  document.body.classList.toggle("video",capMode==="video");startCam()});
 $("bDate").onclick=()=>{dateOn=!dateOn;store.set("date",dateOn?"1":"0");setDate();if(mode==="review")scheduleFull()};
@@ -312,7 +312,7 @@ function refreshThumbs(){thumbsDue=0;if(mode==="review"&&frozen)thumbs(frozen,fr
 strip.addEventListener("scroll",refreshThumbs,{passive:true});
 
 // ---------- Déclenchement ----------
-$("shutter").onclick=()=>{if(capMode==="video"){rec?stopRec():startRec()}else shoot()};
+$("shutter").onclick=()=>{if(capMode==="video"){rec?stopRec():startRec()}else if(maxOn)$("cam").click();else shoot()};
 async function shoot(){if(!stream||!vid.videoWidth||shooting)return;const w=vid.videoWidth,h=vid.videoHeight,c=document.createElement("canvas");c.width=w;c.height=h;
  c.getContext("2d").drawImage(vid,0,0,w,h);const fl=$("flash");fl.style.transition="none";fl.style.opacity=.85;requestAnimationFrame(()=>{fl.style.transition="";fl.style.opacity=0});
  shotDate=new Date();srcName="CAMZ_"+shotDate.toISOString().slice(0,19).replace(/[-:T]/g,"");origBlob=null;
@@ -327,7 +327,7 @@ async function shoot(){if(!stream||!vid.videoWidth||shooting)return;const w=vid.
  if(!g)getPos(8000).then(p=>{if(p&&mode==="review"&&frozen===c){const s2=addGps(exifSeg,p);if(s2!==exifSeg){exifSeg=s2;metaLine({},true,true);scheduleFull()}}})}
 function renderFull(c,sd){const W=c.width,H=c.height;if(!bigR)bigR=new Renderer(document.createElement("canvas"));bigR.cv.width=W;bigR.cv.height=H;bigR.upload(c,true);bigR.draw(film,amt,sd);
  const out=document.createElement("canvas");out.width=W;out.height=H;const x=out.getContext("2d");x.drawImage(bigR.cv,0,0);bigR.cv.width=bigR.cv.height=2;if(dateOn)drawStamp(x,W,H);return out}
-const jpg=c=>new Promise(r=>c.toBlob(r,"image/jpeg",.95));
+const jpg=c=>new Promise(r=>c.toBlob(r,"image/jpeg",.97));
 async function develop(c,sd){const out=renderFull(c,sd),st=Date.now().toString(36).slice(-4);let bl=await jpg(out);out.width=out.height=1;if(exifSeg)bl=await injectExif(bl,exifSeg);
  const files=[new File([bl],`${srcName}_${film.id}_${st}.jpg`,{type:"image/jpeg"})];
  if(origOn){let ob=origBlob;if(!ob){ob=await jpg(c);if(exifSeg)ob=await injectExif(ob,exifSeg)}files.push(new File([ob],`${srcName}_original_${st}.jpg`,{type:ob.type||"image/jpeg"}))}
@@ -337,6 +337,7 @@ async function deliver(files){pendFiles=files;
  catch(e){$("pend").style.display="flex";return false} // geste requis ou feuille annulée → gros bouton pour réessayer
  const f=files[0];pendFiles=null;if(f.type.startsWith("image")){$("out").src=URL.createObjectURL(f);$("sheet").style.display="flex"}
  else{const a=document.createElement("a");a.href=URL.createObjectURL(f);a.download=f.name;a.click()}return false}
+$("quick").onclick=()=>{if(capMode==="photo")shoot()};
 $("pendBtn").onclick=()=>{if(pendFiles)deliver(pendFiles)};
 $("pendNo").onclick=()=>{pendFiles=null;$("pend").style.display="none"};
 
@@ -445,7 +446,7 @@ async function load(file,fromCam){if(!file||!main)return;const buf=await file.ar
    const s2=addGps(exifSeg,lastPos);gpsAdded=s2!==exifSeg;exifSeg=s2;
    if(gpsAdded)origBlob=replaceExif(buf,addGps(rawSeg||minimalExif(shotDate),lastPos))||file}}
  if(exifSeg)metaLine(info,gpsAdded,false);else $("meta").textContent="⚠ pas d'EXIF dans ce fichier";
- const img=new Image();img.onload=()=>{const s=Math.min(1,4096/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement("canvas");
+ const img=new Image();img.onload=()=>{const iw=img.naturalWidth,ih=img.naturalHeight,mt=main.gl.getParameter(main.gl.MAX_TEXTURE_SIZE),s=Math.min(1,Math.sqrt(16.5e6/(iw*ih)),mt/Math.max(iw,ih)),c=document.createElement("canvas");
   c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);stopCam();enterReview(c)};
  img.src=URL.createObjectURL(file)}
 $("cam").onchange=e=>{load(e.target.files[0],true);e.target.value=""};

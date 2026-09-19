@@ -1,5 +1,5 @@
 // réseau d'abord (pour recevoir les mises à jour), cache en secours (hors-ligne)
-const C="camz-v2";
+const C="camz-v3";
 self.addEventListener("install",e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>c.addAll(["./","manifest.json","icon-180.png"])))});
 self.addEventListener("activate",e=>e.waitUntil(self.clients.claim()));
 self.addEventListener("fetch",e=>{if(e.request.method!=="GET")return;
